@@ -3,6 +3,7 @@ import sys
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 
 # ── PATH SETUP ────────────────────────────────────────────────────────────────
 CURRENT_DIR  = os.path.dirname(os.path.abspath(__file__))
@@ -33,12 +34,19 @@ os.makedirs(UPLOAD_FOLDER,    exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
 # ── DATABASE ──────────────────────────────────────────────────────────────────
-# DATABASE_URL can be overridden via environment variable for production.
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://postgres:3198UC9iGEPNrESi@db.hcjuwuzinkqbglhcnlah.supabase.co:5432/postgres",
-)
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+# Set DATABASE_URL environment variable in your Vercel project settings.
+DATABASE_URL = os.environ.get("DATABASE_URL")
+_engine = None
+
+
+def get_engine():
+    """Return a SQLAlchemy engine, creating it lazily on first use."""
+    global _engine
+    if _engine is None:
+        if not DATABASE_URL:
+            raise RuntimeError("DATABASE_URL environment variable is not set.")
+        _engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    return _engine
 
 
 # ── HELPERS ────────────────────────────────────────────────────────────────────
@@ -65,30 +73,38 @@ def index():
 @app.route("/tasks", methods=["GET"])
 def get_tasks():
     """Return all rows from automation_tasks as JSON."""
-    with engine.connect() as conn:
-        result = conn.execute(text("SELECT * FROM automation_tasks"))
-        tasks  = [dict(row._mapping) for row in result]
-    return jsonify({"tasks": tasks})
+    try:
+        with get_engine().connect() as conn:
+            result = conn.execute(text("SELECT * FROM automation_tasks"))
+            tasks  = [dict(row._mapping) for row in result]
+        return jsonify({"tasks": tasks})
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 503
+    except OperationalError as e:
+        return jsonify({"error": "Database connection failed.", "details": str(e)}), 503
 
 
 @app.route("/seed-db", methods=["POST"])
 def seed_db():
     """Insert a sample task and immediately mark it completed (demo endpoint)."""
-    with engine.connect() as conn:
-        conn.execute(text("""
-            INSERT INTO automation_tasks (filename, task_type, status)
-            VALUES (:filename, :task_type, :status)
-        """), {"filename": "file1.csv", "task_type": "csv_to_json", "status": "processing"})
+    try:
+        with get_engine().begin() as conn:
+            conn.execute(text("""
+                INSERT INTO automation_tasks (filename, task_type, status)
+                VALUES (:filename, :task_type, :status)
+            """), {"filename": "file1.csv", "task_type": "csv_to_json", "status": "processing"})
 
-        conn.execute(text("""
-            UPDATE automation_tasks
-            SET status = 'completed'
-            WHERE filename = :filename
-        """), {"filename": "file1.csv"})
+            conn.execute(text("""
+                UPDATE automation_tasks
+                SET status = 'completed'
+                WHERE filename = :filename
+            """), {"filename": "file1.csv"})
 
-        conn.commit()
-
-    return jsonify({"success": True, "message": "DB seeded successfully."})
+        return jsonify({"success": True, "message": "DB seeded successfully."})
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 503
+    except OperationalError as e:
+        return jsonify({"error": "Database connection failed.", "details": str(e)}), 503
 
 
 @app.route("/upload", methods=["POST"])

@@ -1,0 +1,4 @@
+flask
+werkzeug
+sqlalchemy
+psycopg2-binary
