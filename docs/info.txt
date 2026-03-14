@@ -1,0 +1,34 @@
+Tech stack:
+- Backend: Python Flask
+- Frontend: HTML, CSS, JavaScript
+- File uploads handled using Flask
+- Store uploaded files in an uploads folder
+
+Features:
+1. Upload files
+2. Rename multiple files automatically
+3. Convert CSV files to JSON
+4. Organize files by extension (pdf, jpg, mp3 etc.)
+5. Download processed files
+
+Project structure should be:
+```
+file_automation_web/
+│
+├── app.py
+├── requirements.txt
+├── uploads/
+├── processed/
+│
+├── templates/
+│   └── index.html
+│
+├── static/
+│   ├── style.css
+│   └── script.js
+│
+└── automation/
+    ├── rename_files.py
+    ├── csv_to_json.py
+    └── sort_files.py
+```
