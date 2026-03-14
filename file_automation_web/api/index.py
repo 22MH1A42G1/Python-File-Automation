@@ -18,8 +18,8 @@ app = Flask(
     static_folder=os.path.join(PROJECT_ROOT, "static"),
 )
 
-UPLOAD_FOLDER = os.path.join(PROJECT_ROOT, "uploads")
-PROCESSED_FOLDER = os.path.join(PROJECT_ROOT, "processed")
+UPLOAD_FOLDER = "/tmp/uploads"
+PROCESSED_FOLDER = "/tmp/processed"
 
 app.config["UPLOAD_FOLDER"]    = UPLOAD_FOLDER
 app.config["PROCESSED_FOLDER"] = PROCESSED_FOLDER
