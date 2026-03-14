@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Python File Automation</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ── -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⚙️</span>
+        <span class="logo-text">File<span class="accent">Automation</span></span>
+      </div>
+      <p class="header-sub">Upload · Rename · Convert · Organise · Download</p>
+    </div>
+  </header>
+
+  <!-- ── MAIN LAYOUT ── -->
+  <main class="layout">
+
+    <!-- ── SIDEBAR NAV ── -->
+    <nav class="sidebar">
+      <ul>
+        <li><button class="nav-btn active" data-tab="tab-upload">
+          <span class="nav-icon">📤</span> Upload Files
+        </button></li>
+        <li><button class="nav-btn" data-tab="tab-rename">
+          <span class="nav-icon">✏️</span> Rename Files
+        </button></li>
+        <li><button class="nav-btn" data-tab="tab-csv">
+          <span class="nav-icon">🔄</span> CSV → JSON
+        </button></li>
+        <li><button class="nav-btn" data-tab="tab-organise">
+          <span class="nav-icon">📂</span> Organise Files
+        </button></li>
+        <li><button class="nav-btn" data-tab="tab-files">
+          <span class="nav-icon">📋</span> Browse Files
+        </button></li>
+      </ul>
+    </nav>
+
+    <!-- ── CONTENT AREA ── -->
+    <section class="content">
+
+      <!-- TAB 1 : UPLOAD -->
+      <div id="tab-upload" class="tab active">
+        <div class="card">
+          <h2 class="card-title">📤 Upload Files</h2>
+          <p class="card-desc">Select one or more files to upload. They will be stored in the <code>uploads/</code> folder and made available for all other operations.</p>
+
+          <div class="drop-zone" id="dropZone">
+            <span class="drop-icon">☁️</span>
+            <p>Drag &amp; drop files here, or</p>
+            <label class="btn btn-primary" for="fileInput">Browse Files</label>
+            <input type="file" id="fileInput" multiple hidden />
+          </div>
+
+          <div id="filePreview" class="file-preview hidden"></div>
+
+          <div class="action-row">
+            <button class="btn btn-success" id="btnUpload">Upload Now</button>
+            <button class="btn btn-ghost" id="btnClearInput">Clear Selection</button>
+          </div>
+          <div id="uploadResult" class="result-box hidden"></div>
+        </div>
+      </div>
+
+      <!-- TAB 2 : RENAME -->
+      <div id="tab-rename" class="tab">
+        <div class="card">
+          <h2 class="card-title">✏️ Rename Files</h2>
+          <p class="card-desc">Batch-rename every file in <code>uploads/</code> using your chosen prefix. Renamed copies are saved to <code>processed/</code>.</p>
+          <p class="example-note">Example: prefix <strong>report</strong> → <code>report_1.pdf</code>, <code>report_2.jpg</code> …</p>
+
+          <div class="form-group">
+            <label for="renamePrefix">Prefix</label>
+            <input type="text" id="renamePrefix" placeholder="e.g. report, invoice, image …" maxlength="50" />
+          </div>
+
+          <div class="action-row">
+            <button class="btn btn-success" id="btnRename">Rename Files</button>
+          </div>
+          <div id="renameResult" class="result-box hidden"></div>
+        </div>
+      </div>
+
+      <!-- TAB 3 : CSV → JSON -->
+      <div id="tab-csv" class="tab">
+        <div class="card">
+          <h2 class="card-title">🔄 CSV → JSON Conversion</h2>
+          <p class="card-desc">Converts every <code>.csv</code> file in <code>uploads/</code> to a structured JSON file in <code>processed/</code>. UTF-8 BOM is handled automatically.</p>
+
+          <div class="info-box">
+            <strong>How it works:</strong> Each row becomes a JSON object; column headers become keys. The output is a pretty-printed JSON array.
+          </div>
+
+          <div class="action-row">
+            <button class="btn btn-success" id="btnCsvToJson">Convert CSV → JSON</button>
+          </div>
+          <div id="csvResult" class="result-box hidden"></div>
+        </div>
+      </div>
+
+      <!-- TAB 4 : ORGANISE -->
+      <div id="tab-organise" class="tab">
+        <div class="card">
+          <h2 class="card-title">📂 Organise Files by Type</h2>
+          <p class="card-desc">Automatically sorts every file in <code>uploads/</code> into category sub-folders inside <code>processed/</code> based on file extension.</p>
+
+          <div class="category-grid">
+            <div class="cat-chip">🖼️ images</div>
+            <div class="cat-chip">📄 documents</div>
+            <div class="cat-chip">🎵 audio</div>
+            <div class="cat-chip">🎬 video</div>
+            <div class="cat-chip">📊 data</div>
+            <div class="cat-chip">💻 code</div>
+            <div class="cat-chip">🗜️ archives</div>
+            <div class="cat-chip">❓ others</div>
+          </div>
+
+          <div class="action-row">
+            <button class="btn btn-success" id="btnOrganise">Organise Files</button>
+          </div>
+          <div id="organiseResult" class="result-box hidden"></div>
+        </div>
+      </div>
+
+      <!-- TAB 5 : BROWSE FILES -->
+      <div id="tab-files" class="tab">
+        <div class="card">
+          <h2 class="card-title">📋 Browse &amp; Download Files</h2>
+          <p class="card-desc">View files currently in <code>uploads/</code> and <code>processed/</code>. Click <strong>Download</strong> on any processed file to save it.</p>
+
+          <div class="files-wrapper">
+
+            <!-- Uploads panel -->
+            <div class="files-panel">
+              <div class="panel-header">
+                <h3>⬆️ Uploads</h3>
+                <button class="btn btn-sm btn-danger" id="btnClearUploads">Clear</button>
+              </div>
+              <ul id="uploadList" class="file-list">
+                <li class="empty-msg">No files uploaded yet.</li>
+              </ul>
+            </div>
+
+            <!-- Processed panel -->
+            <div class="files-panel">
+              <div class="panel-header">
+                <h3>✅ Processed</h3>
+                <button class="btn btn-sm btn-danger" id="btnClearProcessed">Clear</button>
+              </div>
+              <ul id="processedList" class="file-list">
+                <li class="empty-msg">No processed files yet.</li>
+              </ul>
+            </div>
+
+          </div>
+
+          <div class="action-row" style="margin-top:1rem;">
+            <button class="btn btn-primary" id="btnRefresh">🔄 Refresh List</button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ── TOAST NOTIFICATION ── -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
