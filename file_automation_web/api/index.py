@@ -2,8 +2,10 @@ import os
 import sys
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
+from sqlalchemy import create_engine, text
 
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+# ── PATH SETUP ────────────────────────────────────────────────────────────────
+CURRENT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
@@ -12,26 +14,34 @@ from automation.rename_files import rename_files
 from automation.csv_to_json import convert_csv_to_json
 from automation.sort_files import organize_files
 
+# ── FLASK APP ─────────────────────────────────────────────────────────────────
 app = Flask(
     __name__,
     template_folder=os.path.join(PROJECT_ROOT, "templates"),
     static_folder=os.path.join(PROJECT_ROOT, "static"),
 )
 
-UPLOAD_FOLDER = "/tmp/uploads"
-PROCESSED_FOLDER = "/tmp/processed"
+# ── STORAGE PATHS ─────────────────────────────────────────────────────────────
+UPLOAD_FOLDER    = os.path.join(PROJECT_ROOT, "uploads")
+PROCESSED_FOLDER = os.path.join(PROJECT_ROOT, "processed")
 
-app.config["UPLOAD_FOLDER"]    = UPLOAD_FOLDER
-app.config["PROCESSED_FOLDER"] = PROCESSED_FOLDER
+app.config["UPLOAD_FOLDER"]      = UPLOAD_FOLDER
+app.config["PROCESSED_FOLDER"]   = PROCESSED_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
 
 os.makedirs(UPLOAD_FOLDER,    exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
+# ── DATABASE ──────────────────────────────────────────────────────────────────
+# DATABASE_URL can be overridden via environment variable for production.
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://postgres:3198UC9iGEPNrESi@db.hcjuwuzinkqbglhcnlah.supabase.co:5432/postgres",
+)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
-# ──────────────────────────────────────────────
-# Helpers
-# ──────────────────────────────────────────────
+
+# ── HELPERS ────────────────────────────────────────────────────────────────────
 
 def list_processed_recursive(folder):
     """Return relative paths for every file inside processed/ (incl. sub-dirs)."""
@@ -43,13 +53,42 @@ def list_processed_recursive(folder):
     return result
 
 
-# ──────────────────────────────────────────────
-# Routes
-# ──────────────────────────────────────────────
+# ── ROUTES ─────────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+# ── DATABASE ROUTES ─────────────────────────────────────────────────────────────
+
+@app.route("/tasks", methods=["GET"])
+def get_tasks():
+    """Return all rows from automation_tasks as JSON."""
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT * FROM automation_tasks"))
+        tasks  = [dict(row._mapping) for row in result]
+    return jsonify({"tasks": tasks})
+
+
+@app.route("/seed-db", methods=["POST"])
+def seed_db():
+    """Insert a sample task and immediately mark it completed (demo endpoint)."""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            INSERT INTO automation_tasks (filename, task_type, status)
+            VALUES (:filename, :task_type, :status)
+        """), {"filename": "file1.csv", "task_type": "csv_to_json", "status": "processing"})
+
+        conn.execute(text("""
+            UPDATE automation_tasks
+            SET status = 'completed'
+            WHERE filename = :filename
+        """), {"filename": "file1.csv"})
+
+        conn.commit()
+
+    return jsonify({"success": True, "message": "DB seeded successfully."})
 
 
 @app.route("/upload", methods=["POST"])
