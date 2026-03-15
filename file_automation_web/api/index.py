@@ -23,15 +23,25 @@ app = Flask(
 )
 
 # ── STORAGE PATHS ─────────────────────────────────────────────────────────────
-UPLOAD_FOLDER    = os.path.join(PROJECT_ROOT, "uploads")
-PROCESSED_FOLDER = os.path.join(PROJECT_ROOT, "processed")
+# Vercel's serverless filesystem is read-only except for /tmp.
+# Use /tmp for writable storage; fall back to local dirs when running locally.
+_IS_VERCEL = os.environ.get("VERCEL") == "1"
+if _IS_VERCEL:
+    UPLOAD_FOLDER    = "/tmp/uploads"
+    PROCESSED_FOLDER = "/tmp/processed"
+else:
+    UPLOAD_FOLDER    = os.path.join(PROJECT_ROOT, "uploads")
+    PROCESSED_FOLDER = os.path.join(PROJECT_ROOT, "processed")
 
 app.config["UPLOAD_FOLDER"]      = UPLOAD_FOLDER
 app.config["PROCESSED_FOLDER"]   = PROCESSED_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
 
-os.makedirs(UPLOAD_FOLDER,    exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
+try:
+    os.makedirs(UPLOAD_FOLDER,    exist_ok=True)
+    os.makedirs(PROCESSED_FOLDER, exist_ok=True)
+except OSError:
+    pass  # Read-only filesystem; directories will be created per-request in route handlers
 
 # ── DATABASE ──────────────────────────────────────────────────────────────────
 # Set DATABASE_URL environment variable in your Vercel project settings.
@@ -112,6 +122,7 @@ def upload_files():
     if "files" not in request.files:
         return jsonify({"success": False, "message": "No files provided."}), 400
 
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     files = request.files.getlist("files")
     uploaded = []
 
@@ -134,6 +145,8 @@ def upload_files():
 
 @app.route("/files", methods=["GET"])
 def list_files():
+    os.makedirs(UPLOAD_FOLDER,    exist_ok=True)
+    os.makedirs(PROCESSED_FOLDER, exist_ok=True)
     uploads   = [f for f in os.listdir(UPLOAD_FOLDER)
                  if os.path.isfile(os.path.join(UPLOAD_FOLDER, f))]
     processed = list_processed_recursive(PROCESSED_FOLDER)
