@@ -1,6 +1,6 @@
 # ⚙️ Python File Automation
 
-A browser-based file automation tool built with **Python + Flask** that lets you upload, rename, convert, organise, and download files — all from a sleek dark-themed web UI.
+A browser-based file automation tool built with **Python + Flask** that lets you upload, rename, convert, organise, and download files — all from a sleek dark-themed web UI. Every automation operation is logged to a **PostgreSQL / SQLite** database for full task-history tracking.
 
 ---
 
@@ -27,6 +27,7 @@ A browser-based file automation tool built with **Python + Flask** that lets you
 | 📂 **Organise Files** | Sort files into category sub-folders (`images/`, `documents/`, `audio/`, `video/`, `data/`, `code/`, `archives/`, `others/`) |
 | 📋 **Browse & Download** | View uploaded and processed files; download any processed file with one click |
 | 🗑️ **Clear Folders** | Clear the uploads or processed folder independently |
+| 🗄️ **Task History** | Every automation operation is recorded in the database with filename, task type, and status |
 
 ---
 
@@ -49,6 +50,8 @@ flowchart TD
         R_DL["GET  /download/&lt;file&gt;"]
         R_ClearU["POST /clear-uploads"]
         R_ClearP["POST /clear-processed"]
+        R_Tasks["GET  /tasks"]
+        R_SeedDB["POST /seed-db"]
     end
 
     subgraph Automation["⚙️ Automation Modules"]
@@ -62,6 +65,10 @@ flowchart TD
         FS_Proc["processed/\n├── images/\n├── documents/\n├── audio/\n├── video/\n├── data/\n├── code/\n├── archives/\n└── others/"]
     end
 
+    subgraph Database["🗄️ Database (SQLAlchemy)"]
+        DB[("PostgreSQL / SQLite\nautomation_tasks table\n─────────────────\nid · filename\ntask_type · status\ncreated_at")]
+    end
+
     UI -- "HTTP REST (JSON/multipart)" --> Flask
     R_Upload --> FS_Up
     R_Rename --> M_Rename --> FS_Proc
@@ -70,6 +77,11 @@ flowchart TD
     R_Files  --> FS_Up & FS_Proc
     R_DL     --> FS_Proc
     FS_Up    -. "reads" .-> M_Rename & M_CSV & M_Sort
+    R_Tasks  --> Database
+    R_SeedDB --> Database
+    M_Rename -. "logs task" .-> Database
+    M_CSV    -. "logs task" .-> Database
+    M_Sort   -. "logs task" .-> Database
 ```
 
 ---
@@ -87,11 +99,17 @@ graph LR
     User --> UC5["📋 Browse Files"]
     User --> UC6["⬇️ Download Processed File"]
     User --> UC7["🗑️ Clear Uploads / Processed"]
+    User --> UC8["🗄️ View Task History"]
 
     UC2 -. "requires" .-> UC1
     UC3 -. "requires" .-> UC1
     UC4 -. "requires" .-> UC1
     UC6 -. "requires" .-> UC5
+    UC8 -. "reads from" .-> DB[("🗄️ Database")]
+
+    UC2 -. "logs to" .-> DB
+    UC3 -. "logs to" .-> DB
+    UC4 -. "logs to" .-> DB
 
     style User fill:#6c63ff,color:#fff,stroke:#6c63ff
     style UC1 fill:#1a1d27,color:#e2e8f0,stroke:#2a2d3e
@@ -101,6 +119,8 @@ graph LR
     style UC5 fill:#1a1d27,color:#e2e8f0,stroke:#2a2d3e
     style UC6 fill:#1a1d27,color:#e2e8f0,stroke:#2a2d3e
     style UC7 fill:#1a1d27,color:#e2e8f0,stroke:#2a2d3e
+    style UC8 fill:#1a1d27,color:#e2e8f0,stroke:#2a2d3e
+    style DB  fill:#0f3460,color:#e2e8f0,stroke:#1a6aab
 ```
 
 ---
@@ -152,9 +172,35 @@ graph LR
 | Layer | Technology |
 |---|---|
 | **Backend** | Python 3, Flask |
+| **Database** | PostgreSQL (production) / SQLite (development) via SQLAlchemy ORM |
 | **File handling** | `os`, `shutil`, `csv`, `json` (stdlib) |
 | **Frontend** | Vanilla HTML5, CSS3 (custom dark theme), JavaScript (Fetch API) |
+| **Deployment** | Vercel (serverless) |
 | **Security** | `werkzeug.utils.secure_filename`, path-traversal guard on downloads |
+
+### 🗄️ Database Schema
+
+The `automation_tasks` table is used to record every file operation. Schema shown in **PostgreSQL** syntax; for SQLite, replace `SERIAL` with `INTEGER` (SQLite auto-increments integer primary keys automatically).
+
+```sql
+-- PostgreSQL
+CREATE TABLE IF NOT EXISTS automation_tasks (
+    id         SERIAL PRIMARY KEY,
+    filename   VARCHAR(255)  NOT NULL,
+    task_type  VARCHAR(50)   NOT NULL,   -- 'rename' | 'csv_to_json' | 'organize'
+    status     VARCHAR(20)   NOT NULL,   -- 'processing' | 'completed' | 'failed'
+    created_at TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+);
+
+-- SQLite equivalent
+CREATE TABLE IF NOT EXISTS automation_tasks (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename   TEXT          NOT NULL,
+    task_type  TEXT          NOT NULL,
+    status     TEXT          NOT NULL,
+    created_at TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+);
+```
 
 ---
 
@@ -164,6 +210,7 @@ graph LR
 
 - Python 3.9+
 - pip
+- PostgreSQL (optional — SQLite used automatically when `DATABASE_URL` is not set)
 
 ### Installation
 
@@ -175,7 +222,22 @@ cd Python-File-Automation/file_automation_web
 # 2 · Install dependencies
 pip install -r requirements.txt
 
-# 3 · Run the development server
+# 3 · (Optional) Set your database URL
+#     Skip this step to use SQLite locally; required for PostgreSQL / Vercel
+export DATABASE_URL="postgresql://user:password@host:5432/dbname"
+
+# 4 · Create the database table — PostgreSQL only (run once)
+#     SQLite users: skip this step; the table is created automatically by SQLAlchemy.
+psql $DATABASE_URL -c "
+  CREATE TABLE IF NOT EXISTS automation_tasks (
+    id         SERIAL PRIMARY KEY,
+    filename   VARCHAR(255) NOT NULL,
+    task_type  VARCHAR(50)  NOT NULL,
+    status     VARCHAR(20)  NOT NULL,
+    created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+  );"
+
+# 5 · Run the development server
 python app.py
 ```
 
@@ -186,7 +248,8 @@ Open your browser at **http://127.0.0.1:5000** 🎉
 ```
 flask
 werkzeug
-pandas
+sqlalchemy
+psycopg2-binary
 ```
 
 ---
@@ -204,6 +267,8 @@ pandas
 | `GET` | `/download/<path:filename>` | Download a processed file |
 | `POST` | `/clear-uploads` | Delete all files from `uploads/` |
 | `POST` | `/clear-processed` | Delete all files/folders from `processed/` |
+| `GET` | `/tasks` | Retrieve all automation task records from the database |
+| `POST` | `/seed-db` | Insert a demo task record and mark it completed (dev only) |
 
 ---
 
@@ -211,9 +276,14 @@ pandas
 
 ```
 Python-File-Automation/
+├── README.md
+├── requirements.txt
+├── vercel.json                  # Vercel serverless deployment config
 └── file_automation_web/
-    ├── app.py                   # Flask application & route definitions
+    ├── app.py                   # Flask application & route definitions (local dev)
     ├── requirements.txt         # Python dependencies
+    ├── api/
+    │   └── index.py             # Vercel serverless entry-point (includes DB routes)
     ├── automation/
     │   ├── __init__.py
     │   ├── rename_files.py      # Batch-rename logic
